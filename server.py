@@ -69,8 +69,8 @@ def test_connect():
     updateRoster()
 
 
-    for message in messages:
-        emit('message', message)
+    #for message in messages:
+        #emit('message', message)
 
 @socketio.on('search', namespace='/chat')
 def search(searchString):
@@ -86,7 +86,7 @@ def search(searchString):
     for i in rows:
         tmp = {'text':i[2], 'name':i[1]}
         print 'search', 'search match', tmp
-        emit('message', tmp, broadcast=False)
+        emit('searchResults', tmp, broadcast=False)
  
 @socketio.on('message', namespace='/chat')
 def new_message(message):
@@ -135,6 +135,16 @@ def on_login(pw):
        restrictions = fetchOne[3] # for future use
        print "on_login", "login successful", fetchOne, restrictions
        #updateRoster()
+       db = connectToDBchat()
+       cur = db.cursor(cursor_factory=psycopg2.extras.DictCursor)
+       query = "SELECT * from messages"
+       cur.execute(query)
+       rows = cur.fetchall()
+       #print 'search', "fetchall results", rows
+       for i in rows:
+           tmp = {'text':i[2], 'name':i[1]}
+           #print 'search', 'search match', tmp
+           emit('message', tmp, broadcast=True)
     else:
        print "on_login", "login unsuccessful"
        emit('failedLogin')
