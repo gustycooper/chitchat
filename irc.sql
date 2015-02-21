@@ -35,6 +35,12 @@ INSERT INTO users (username, password, restrictions) VALUES
 ('raz', crypt('p00d13',gen_salt('bf')), 'none'),
 ('ann', crypt('changeme',gen_salt('bf')), 'none'),
 ('gusty', crypt('gusty',gen_salt('bf')), 'none'),
+('jerrianne', crypt('jerrianne',gen_salt('bf')), 'none'),
+('jeremy', crypt('jeremy',gen_salt('bf')), 'none'),
+('brandalee', crypt('brandalee',gen_salt('bf')), 'none'),
+('zachary', crypt('zachary',gen_salt('bf')), 'none'),
+('emily', crypt('emily',gen_salt('bf')), 'none'),
+('lee', crypt('lee',gen_salt('bf')), 'none'),
 ('lazy', crypt('qwerty',gen_salt('bf')), 'none');
 
 
