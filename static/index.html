@@ -28,11 +28,23 @@ visibility: hidden;
 </style>
 <script language="JavaScript" type="text/javascript">
 function login(showhide){
-if(showhide == "show"){
-    document.getElementById('popupbox').style.visibility="visible";
-}else if(showhide == "hide"){
-    document.getElementById('popupbox').style.visibility="hidden"; 
-}
+    if(showhide == "show"){
+        document.getElementById('popupbox').style.visibility="visible";
+        document.getElementById('logout').style.visibility="hidden";
+        document.getElementById('afterlogin').style.visibility="hidden";
+        //document.getElementById('chatwindow').style.visibility="hidden";
+        //document.getElementById('chatheader').style.visibility="hidden";
+        //document.getElementById('searchwindow').style.visibility="hidden";
+        //document.getElementById('searchheader').style.visibility="hidden";
+    }else if(showhide == "hide"){
+        document.getElementById('popupbox').style.visibility="hidden"; 
+        document.getElementById('afterlogin').style.visibility="visible";
+        document.getElementById('logout').style.visibility="visible";
+        //document.getElementById('chatwindow').style.visibility="visible";
+        //document.getElementById('chatheader').style.visibility="visible";
+        //document.getElementById('searchwindow').style.visibility="visible";
+        //document.getElementById('searchheader').style.visibility="visible";
+    }
 }
 
       function ChatController($scope) {
@@ -80,6 +92,24 @@ if(showhide == "show"){
           login('show')
         });
 
+        $scope.disconnect = function disconnect() {
+          console.log('disconnect:');
+          console.log(document.getElementById('popupbox').style.visibility);
+          console.log(document.getElementById('logout').style.visibility);
+          if (document.getElementById('popupbox').style.visibility=="hidden") {
+             console.log('disconnect: popup hidden');
+             console.log('disconnect: ', $scope.name2, $scope.password);
+             $scope.name2 = ''
+             $scope.password = ''
+             $scope.messages = [];
+             $scope.searchResults = [];
+             socket.emit('disconnect');
+          } else { 
+             console.log('disconnect: popup visible');
+          }
+          // socket.emit('disconnect');
+        };
+
         $scope.send = function send() {
           console.log('Sending message:', $scope.text);
           socket.emit('message', $scope.text);
@@ -95,8 +125,8 @@ if(showhide == "show"){
         $scope.setName = function setName() {
           socket.emit('identify', $scope.name);
         };
+
         $scope.setName2 = function setName2() {
-          
           socket.emit('identify', $scope.name2);
           $scope.name = $scope.name2;
           $scope.$apply();
@@ -129,7 +159,13 @@ if(showhide == "show"){
 
       <div class="navbar navbar-fixed-top navbar-inverse">
         <div class="navbar-inner">
-          <li class="brand"> Logout </li>
+          <div id="logout" class="pull-left" visibility:"visible">
+            <form ng-submit="disconnect()">
+              <input type="submit" value="Logout">
+       <!--     <a href="https://c9.io" class="brand">Logout</a> -->
+       <!--   <li class="brand"> Logout </li> -->
+            </form>
+          </div>
           <div class="pull-right">
             <a href="https://c9.io" class="brand">Cloud9 IDE</a>
           </div>
@@ -139,10 +175,10 @@ if(showhide == "show"){
         <h1>The Chit-Chat Room <img height=50 width=50 src="img/GustyGR.jpg" alt="Gusty" > </h1>
 
       </div>
-      <div class="row">
+      <div id="afterlogin" class="row">
         <div class="span3">
           <ul class="nav nav-list well">
-            <li class="nav-header">Local Users</li>
+            <li class="nav-header">Chit-Chat Users</li>
             <li ng-repeat="user in roster" ng-bind="user">
             </li>
           </ul>

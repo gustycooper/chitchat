@@ -144,17 +144,21 @@ def on_login(pw):
        for i in rows:
            tmp = {'text':i[2], 'name':i[1]}
            #print 'search', 'search match', tmp
-           emit('message', tmp, broadcast=True)
+           emit('message', tmp, broadcast=False)
     else:
        print "on_login", "login unsuccessful"
+       users[session['uuid']]={'username':''}
+       #updateRoster()
        emit('failedLogin')
     
 @socketio.on('disconnect', namespace='/chat')
 def on_disconnect():
-    print 'disconnect'
+    print 'on_disconnect'
     if session['uuid'] in users:
+        print 'on_disconnect', users[session['uuid']]
         del users[session['uuid']]
         updateRoster()
+        emit('failedLogin')
 
 @app.route('/')
 def hello_world():
