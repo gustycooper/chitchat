@@ -83,9 +83,15 @@ def search(searchString):
     cur.execute(query)
     rows = cur.fetchall()
     print 'search', "fetchall results", rows
-    for i in rows:
-        tmp = {'text':i[2], 'name':i[1]}
-        print 'search', 'search match', tmp
+    emit('searchStart')
+    if rows:
+        for i in rows:
+            tmp = {'text':i[2], 'name':i[1]}
+            print 'search', 'search match', tmp
+            emit('searchResults', tmp, broadcast=False)
+    else:
+        tmp = {'text':'NO MATCHES', 'name':''}
+        print 'search', 'search nomatch', tmp
         emit('searchResults', tmp, broadcast=False)
  
 @socketio.on('message', namespace='/chat')

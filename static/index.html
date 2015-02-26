@@ -73,6 +73,11 @@ function login(showhide){
           chatThread.scrollTop = chatThread.scrollHeight;
         });
 
+        socket.on('searchStart', function () {
+          console.log("searchStart")
+          $scope.searchResults = [];
+        });
+
         socket.on('searchResults', function (msg) {
           console.log(msg);
           $scope.searchResults.push(msg);
@@ -152,7 +157,7 @@ function login(showhide){
         <center><input type="text"  ng-model="name2" ng-change="setName2()" placeholder="Username" size="24" /></center>
         <center>Password:</center>
         <center><input  ng-model="password" type="password" placeholder="Password" size="24" /></center>
-        <center><input type="submit" class="span1 btn btn-primary" value="Send" ng-disabled="!password"></center>
+        <center><input type="submit" class="span1 btn btn-primary" value="Send" ng-disabled="!password || !name2"></center>
         </form>
         <br />
       </div> 
