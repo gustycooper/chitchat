@@ -4,7 +4,7 @@ import psycopg2.extras
 import os
 import uuid
 from flask import Flask, session
-from flask.ext.socketio import SocketIO, emit
+from flask.ext.socketio import SocketIO, emit, join_room, leave_room
 
 app = Flask(__name__, static_url_path='')
 app.config['SECRET_KEY'] = 'secret!'
@@ -14,8 +14,31 @@ socketio = SocketIO(app)
 messages = [{'text':'test', 'name':'testName'}]
 users = {}
 
+'''
+roomsUsers is a dictionary where the key is a room and the value is a list of users
+Three functions add, remove, and get the users from a room
+Both rooms and users are strings
+'''
+
+roomsUsers = {}
+
+def addUserToRoom(u,r):
+    roomsUsers[r] = roomsUsers.get(r,[])+[u]
+
+def removeUserFromRoom(u,r):
+    roomsUsers[r].remove(u)
+
+def specialUserRemove(u):
+    for r,l in roomsUsers.items():
+        if u in l:
+            l.remove(u)
+            break
+
+def getUsersInRoom(r):
+    return roomsUsers[r]
+
 def connectToDBchat():
-  connectionString = 'dbname=chat user=gusty password= host=localhost'
+  connectionString = 'dbname=chitchat user=gusty password= host=localhost'
   try:
     return psycopg2.connect(connectionString)
   except:
@@ -47,7 +70,7 @@ def updateRoster():
     for user_id in  users:
         print users[user_id]['username']
         if len(users[user_id]['username'])==0:
-            names.append('Anonymous')
+            names.append('Not Logged In')
         else:
             names.append(users[user_id]['username'])
     print 'broadcasting names'
@@ -74,25 +97,109 @@ def test_connect():
 
 @socketio.on('search', namespace='/chat')
 def search(searchString):
-    searchString = '%'+searchString+'%'
-    print 'search',"searchString", searchString
-    db = connectToDBchat()
-    cur = db.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    query = cur.mogrify("""SELECT * FROM messages WHERE message LIKE %s OR userid LIKE %s""", (searchString,searchString ))
-    print 'search',"query",query
-    cur.execute(query)
-    rows = cur.fetchall()
-    print 'search', "fetchall results", rows
-    emit('searchStart')
-    if rows:
-        for i in rows:
-            tmp = {'text':i[2], 'name':i[1]}
-            print 'search', 'search match', tmp
-            emit('searchResults', tmp, broadcast=False)
-    else:
-        tmp = {'text':'NO MATCHES', 'name':''}
-        print 'search', 'search nomatch', tmp
+    if searchString[0] == '\\': # process command
+        listUsers = False
+        changedRoom = False
+        u = users[session['uuid']]['username'] # get the user name
+        l = searchString.split()
+        cmdLen = len(l)
+        if cmdLen == 2: # join \j room
+            cmd,room = searchString.split()
+        else: # list room \l or exit room \x
+            cmd,room = l[0],'NOT'
+        if cmd == '\\j' and cmdLen == 2: 
+            if session['room'] != None:
+                msg = "Joining room "+room+" and exiting room "+session['room']
+                leave_room(session['room'])
+                removeUserFromRoom(u,session['room'])
+            else:
+                msg = "Joining room "+room+" No longer in global space."
+            join_room(room)
+            addUserToRoom(u,room)
+            session['room'] = room
+            emit('roomUpdate',room)
+            print 'search', "joining ", msg
+            changedRoom = True
+        elif cmd == '\\x' and cmdLen == 1:
+            if session['room'] != None:
+                msg = "Exiting room "+session['room']+" Now in global space."
+                leave_room(session['room'])
+                removeUserFromRoom(u,session['room'])
+                addUserToRoom(u,'GLOBAL')
+                session['room'] = None
+                emit('roomUpdate','GLOBAL')
+            else:
+                msg = "You are not in a room to exit."
+            print 'search', "exiting ", msg
+            changedRoom = True
+        elif cmd == '\\l' and cmdLen == 1:
+            listUsers = True
+            if session['room'] != None:
+                msg = "Current room "+session['room']
+                r = session['room']
+            else:
+                msg = "Current room GLOBAL"
+                r = 'GLOBAL'
+            print 'search', "listing room", msg
+        else:
+            msg = searchString+" is an invalid command."
+        emit('searchStart')
+        tmp = {'text':msg, 'name':'Command Results'}
+        print 'search', tmp
         emit('searchResults', tmp, broadcast=False)
+        if listUsers:
+            for i in getUsersInRoom(r):
+                tmp = {'text':i, 'name':r}
+                print 'search', 'Users in room', tmp
+                emit('searchResults', tmp, broadcast=False)
+        # I AM HERE - Fix this to update the messages to reflect room changes
+        if changedRoom:
+            print "search", "changedRoom"
+            emit('messageStart')
+            db = connectToDBchat()
+            cur = db.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            if session['room'] != None:
+               query = cur.mogrify("""SELECT * FROM messages WHERE room = %s""", (session['room'],))
+            else:
+               query = "SELECT * from messages"
+            cur.execute(query)
+            rows = cur.fetchall()
+            #print 'search', "fetchall results", rows
+            for i in rows:
+                tmp = {'text':i[2], 'name':i[1]}
+                #print 'search', 'search match', tmp
+                emit('message', tmp, broadcast=False)
+            else:
+                tmp = {'text':'', 'name':''}
+                emit('message', tmp, broadcast=False)
+    else: # search for string
+        specialSearch = False
+        if len(searchString) > 3 and searchString[0] == '%' and searchString[1] == '*':
+            searchString = searchString[3:]
+            specialSearch = True
+            print 'search', "special search"
+        searchString = '%'+searchString+'%'
+        print 'search',"searchString", searchString
+        db = connectToDBchat()
+        cur = db.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        if session['room'] != None and not specialSearch: # search room specific
+            query = cur.mogrify("""SELECT * FROM messages WHERE (message LIKE %s OR userid LIKE %s) AND room = %s""", (searchString,searchString,session['room']))
+        else: # search entire table without considering room
+            query = cur.mogrify("""SELECT * FROM messages WHERE message LIKE %s OR userid LIKE %s""", (searchString,searchString ))
+        print 'search',"query",query
+        cur.execute(query)
+        rows = cur.fetchall()
+        print 'search', "fetchall results", rows
+        emit('searchStart')
+        if rows:
+            for i in rows:
+                tmp = {'text':i[2], 'name':i[1]}
+                print 'search', 'search match', tmp
+                emit('searchResults', tmp, broadcast=False)
+        else:
+            tmp = {'text':'NO MATCHES', 'name':''}
+            print 'search', 'search nomatch', tmp
+            emit('searchResults', tmp, broadcast=False)
  
 @socketio.on('message', namespace='/chat')
 def new_message(message):
@@ -103,10 +210,17 @@ def new_message(message):
     print 'new_message',"message", message
     print 'new_message',"userename", username
     print 'new_message',"tmp", tmp
-    emit('message', tmp, broadcast=True)
+    if session['room'] != None:
+        emit('message', tmp, broadcast=True, room=session['room'])
+    else:
+        emit('message', tmp, broadcast=True)
     db = connectToDBchat()
     cur = db.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    query = cur.mogrify("""INSERT INTO messages (userid,message) VALUES (%s,%s)""", (username, message))
+    if session['room'] != None:
+        query = cur.mogrify("""INSERT INTO messages (userid,message,room) VALUES (%s,%s,%s)""", (username, message,session['room']))
+    else:
+        query = cur.mogrify("""INSERT INTO messages (userid,message,room) VALUES (%s,%s,NULL)""", (username, message))
+        
     print 'new_message',"query",query
     cur.execute(query)
     print 'new_message', "query status", cur.statusmessage
@@ -123,8 +237,14 @@ def on_identify(message):
 
 
 @socketio.on('login', namespace='/chat')
-def on_login(pw):
-    print 'on_login '  + pw
+def on_login(pwRoom):
+    pw,room = pwRoom.split()
+    if room == 'undefined':
+        room = None
+        prRoom = "None"
+    else:
+        prRoom = room
+    print 'on_login pw:'+pw+" prRoom:"+prRoom+" pwRoom:"+pwRoom
     #users[session['uuid']]={'username':message}
     #updateRoster()
     db = connectToDBchat()
@@ -138,18 +258,32 @@ def on_login(pw):
     fetchOne = cur.fetchone()
     print "on_login", fetchOne
     if fetchOne:
+       session['room'] = room
+       if room != None:
+           join_room(room)
+           emit('roomUpdate',room)
+           addUserToRoom(username,room)
+       else:
+           emit('roomUpdate','GLOBAL')
+           addUserToRoom(username,'GLOBAL')
        restrictions = fetchOne[3] # for future use
        print "on_login", "login successful", fetchOne, restrictions
        #updateRoster()
        db = connectToDBchat()
        cur = db.cursor(cursor_factory=psycopg2.extras.DictCursor)
-       query = "SELECT * from messages"
+       if session['room'] != None:
+          query = cur.mogrify("""SELECT * FROM messages WHERE room = %s""", (room,))
+       else:
+          query = "SELECT * from messages"
        cur.execute(query)
        rows = cur.fetchall()
        #print 'search', "fetchall results", rows
        for i in rows:
            tmp = {'text':i[2], 'name':i[1]}
            #print 'search', 'search match', tmp
+           emit('message', tmp, broadcast=False)
+       else:
+           tmp = {'text':'', 'name':''}
            emit('message', tmp, broadcast=False)
     else:
        print "on_login", "login unsuccessful"
@@ -162,6 +296,10 @@ def on_disconnect():
     print 'on_disconnect'
     if session['uuid'] in users:
         print 'on_disconnect', users[session['uuid']]
+        u = users[session['uuid']]['username'] # get the user name
+        print 'on_disconnect', u
+        specialUserRemove(u)
+        #removeUserFromRoom(u,session['room'])
         del users[session['uuid']]
         updateRoster()
         emit('failedLogin')
