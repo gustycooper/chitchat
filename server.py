@@ -108,6 +108,24 @@ def search(searchString):
         else: # list room \l or exit room \x
             cmd,room = l[0],'NOT'
         if cmd == '\\j' and cmdLen == 2: 
+            # check for joining restricted rooms
+            if room in ['COOPERS','CPSC350','CPSC110','CPSC125','RONSFOLKS']: #restricted rooms
+                db = connectToDBchat()
+                cur = db.cursor(cursor_factory=psycopg2.extras.DictCursor)
+                username = users[session['uuid']]
+                username = username['username']
+                print "search restricted room check", username
+                # select * from users u join rooms r on u.username=r.username where u.username='gusty' and u.password=crypt('gusty',password) and r.roomname='COOPERS'
+                query = cur.mogrify("""SELECT * FROM users u JOIN rooms r on u.username = r.username WHERE u.username = %s AND r.roomname = %s""", (username, room))
+                cur.execute(query)
+                fetchOne = cur.fetchone()
+                print "search", fetchOne
+                if fetchOne:
+                    print "search restricted access allowed"
+                else:
+                    print "search restricted access not allowed"
+                    room = session['room']
+        ###
             if session['room'] != None:
                 msg = "Joining room "+room+" and exiting room "+session['room']
                 leave_room(session['room'])
@@ -252,7 +270,11 @@ def on_login(pwRoom):
     username = users[session['uuid']]
     username = username['username']
     print "on_login", username
-    query = cur.mogrify("""SELECT * FROM users WHERE username = %s AND password = crypt(%s,password)""", (username, pw))
+    if room in ['COOPERS','CPSC350','CPSC110','CPSC125','RONSFOLKS']: #restricted rooms
+        # select * from users u join rooms r on u.username=r.username where u.username='gusty' and u.password=crypt('gusty',password) and r.roomname='COOPERS'
+        query = cur.mogrify("""SELECT * FROM users u JOIN rooms r on u.username = r.username WHERE u.username = %s AND u.password = crypt(%s,password) AND r.roomname = %s""", (username, pw, room))
+    else: # plain old string rooms 
+        query = cur.mogrify("""SELECT * FROM users WHERE username = %s AND password = crypt(%s,password)""", (username, pw))
     print "on_login", username, pw, query
     cur.execute(query)
     fetchOne = cur.fetchone()
